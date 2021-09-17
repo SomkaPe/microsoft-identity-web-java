@@ -4,7 +4,7 @@
 package com.microsoft.azure.webappauth;
 
 import com.microsoft.aad.msal4j.IAuthenticationResult;
-import jdk.internal.joptsimple.internal.Strings;
+import org.apache.commons.lang3.StringUtils;
 
 import javax.servlet.http.HttpSession;
 
@@ -32,7 +32,7 @@ public class SessionHelper {
         // session`s state should not used more than once
         session.removeAttribute(STATE);
 
-        if(Strings.isNullOrEmpty(sessionState)){
+        if(StringUtils.isBlank(sessionState)){
             throw new Exception(FAILED_TO_VALIDATE_MESSAGE + "could not validate state, missing session`s state");
         }
 
@@ -47,7 +47,7 @@ public class SessionHelper {
         // session`s nonce should not used more than once
         session.removeAttribute(NONCE);
 
-        if(Strings.isNullOrEmpty(sessionNonce)){
+        if(StringUtils.isBlank(sessionNonce)){
             throw new Exception(FAILED_TO_VALIDATE_MESSAGE + "could not validate nonce, missing session`s nonce");
         }
 

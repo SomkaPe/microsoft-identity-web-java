@@ -11,7 +11,7 @@ import com.nimbusds.openid.connect.sdk.AuthenticationErrorResponse;
 import com.nimbusds.openid.connect.sdk.AuthenticationResponse;
 import com.nimbusds.openid.connect.sdk.AuthenticationResponseParser;
 import com.nimbusds.openid.connect.sdk.AuthenticationSuccessResponse;
-import jdk.internal.joptsimple.internal.Strings;
+import org.apache.commons.lang3.StringUtils;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
@@ -57,7 +57,7 @@ public class AuthHelper {
      *  - persistence of OIDC tokens and user credential in the user`s session
      * @param request auth code redirect request from identity provider
      */
-    void processAuthCodeRedirectRequest(HttpServletRequest request) throws Throwable {
+    public void processAuthCodeRedirectRequest(HttpServletRequest request) throws Throwable {
         HttpSession session = request.getSession();
 
         // validate that state in response equals to state in request stored previously in the session
@@ -115,7 +115,7 @@ public class AuthHelper {
 
     private void validateAuthRespMatchesAuthCodeFlow(AuthenticationSuccessResponse oidcResponse) throws Exception {
         String authCode = oidcResponse.getAuthorizationCode().getValue();
-        if (Strings.isNullOrEmpty(authCode)) {
+        if (StringUtils.isBlank(authCode)) {
             throw new Exception(FAILED_TO_VALIDATE_MESSAGE + "empty or null auth code received");
         }
     }
@@ -128,7 +128,7 @@ public class AuthHelper {
      * @param request
      * @return boolean
      */
-    boolean isSessionAuthenticated(HttpServletRequest request) throws MalformedURLException {
+    public boolean isSessionAuthenticated(HttpServletRequest request) throws MalformedURLException {
         HttpSession session = request.getSession();
 
         IAuthenticationResult credential = SessionHelper.getSessionPrincipal(session);
@@ -140,7 +140,7 @@ public class AuthHelper {
         }
 
         String tokenCache = SessionHelper.getTokenCache(session);
-        if(!Strings.isNullOrEmpty(tokenCache)){
+        if(StringUtils.isNoneBlank(tokenCache)){
             IConfidentialClientApplication app = createClientApplication();
 
             app.tokenCache().deserialize(tokenCache);
@@ -175,8 +175,15 @@ public class AuthHelper {
             (IConfidentialClientApplication app, IAuthenticationResult credential)
             throws MalformedURLException, ExecutionException, InterruptedException {
 
+            return getTokenSilently(app, credential, config.getScope());
+    }
+
+    private IAuthenticationResult getTokenSilently
+            (IConfidentialClientApplication app, IAuthenticationResult credential, String scope)
+            throws MalformedURLException, ExecutionException, InterruptedException {
+
         SilentParameters parameters = SilentParameters.builder(
-                Collections.singleton(config.getScope()),
+                Collections.singleton(scope),
                 credential.account()).build();
 
         return app.acquireTokenSilently(parameters).get();
@@ -206,7 +213,31 @@ public class AuthHelper {
      * @param scope
      * @return
      */
-    String getAccessToken(String scope){
+    public String getAccessToken(String scope, HttpServletRequest request) throws MalformedURLException {
+        HttpSession session = request.getSession();
+
+        IAuthenticationResult credential = SessionHelper.getSessionPrincipal(session);
+        if(credential == null){
+            return null;
+        }
+
+        String tokenCache = SessionHelper.getTokenCache(session);
+        if(StringUtils.isNoneBlank(tokenCache)){
+            IConfidentialClientApplication app = createClientApplication();
+
+            app.tokenCache().deserialize(tokenCache);
+
+            try {
+                IAuthenticationResult authResult = getTokenSilently(app, credential, scope);
+                if(authResult != null && StringUtils.isNoneBlank(authResult.accessToken())){
+                    SessionHelper.setTokenCache(session, app.tokenCache().serialize());
+
+                    return authResult.accessToken();
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
         return null;
     }
 
@@ -214,7 +245,7 @@ public class AuthHelper {
      * Return user`s credential attached to the session
      * @return
      */
-    IAuthenticationResult getCredential(HttpServletRequest request){
+    public IAuthenticationResult getCredential(HttpServletRequest request){
         return SessionHelper.getSessionPrincipal(request.getSession());
     }
 
@@ -223,7 +254,7 @@ public class AuthHelper {
      * to perform authorization
      * @return
      */
-    String getAuthorizationUrl(HttpServletRequest request) throws MalformedURLException {
+    public String getAuthorizationUrl(HttpServletRequest request) throws MalformedURLException {
 
         String state = UUID.randomUUID().toString();
         String nonce = UUID.randomUUID().toString();
@@ -234,7 +265,7 @@ public class AuthHelper {
                 .builder(config.getClientId()).authority(config.getAuthority())
                 .build();
 
-        String scopeParameter = Strings.isNullOrEmpty(config.getScope()) ? "" : config.getScope();
+        String scopeParameter = StringUtils.isBlank(config.getScope()) ? "" : config.getScope();
 
         AuthorizationRequestUrlParameters parameters =
                 AuthorizationRequestUrlParameters
@@ -261,11 +292,11 @@ public class AuthHelper {
      * to invalidate user`s session
      * @return
      */
-    String getLogOutUrl(String postLogoutRedirectUrl) throws UnsupportedEncodingException {
-        return String.format(LOG_OUT_URL_WITH_REDIRECT_FORMAT, URLEncoder.encode(postLogoutRedirectUrl, "UTF-8"));
-    }
-
-    String getLogOutUrl() throws UnsupportedEncodingException {
+    public String getLogOutUrl() throws UnsupportedEncodingException {
+        if(StringUtils.isNoneBlank(config.getPostLogoutURI())){
+            return String.format
+                    (LOG_OUT_URL_WITH_REDIRECT_FORMAT, URLEncoder.encode(config.getPostLogoutURI(), "UTF-8"));
+        }
         return LOG_OUT_URL_WITH_REDIRECT_FORMAT;
     }
 }

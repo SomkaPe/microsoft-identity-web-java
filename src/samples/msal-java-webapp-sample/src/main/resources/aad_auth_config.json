@@ -1,0 +1,8 @@
+{
+  "clientId": "",
+  "authority": "https://login.microsoftonline.com/common/",
+  "redirectURI": "https://localhost:8080/msal4jsample/auth-code-redirect",
+  "scope": "User.Read",
+  "secret": "",
+  "postLogoutURI": "https://localhost:8080/msal4jsample"
+}
